@@ -43,7 +43,7 @@ templates/                   # Generated Catalog (don't manually edit)
 
 ### Usage
 #### Create a Catalog Repo
-Create a GitHub Repo.
+Create a GitHub Repo. This is `catalog_repo:` value in ``.drone.yml`
 
 [Sample Repo to get you started.](https://github.com/jgreat/drone-rancher-catalog-base)
 
@@ -77,7 +77,7 @@ publish:
     docker_password: $$DOCKER_PASS        # Docker Hub Password
     docker_repo: jgreat/core-api          # Docker Hub Repo
     catalog_repo: jgreat/rancher-core-api # Rancher Catalog to Populate
-    github_token: $$GITHUB_TOKEN          # Personal API Token
+    github_token: $$GITHUB_TOKEN          # Personal GitHub API Token
     github_user: Jason Greathouse         # GitHub Username (for git commit)
     github_email: jason@jgreat.me         # GitHub Email (for git commit)
 ```
