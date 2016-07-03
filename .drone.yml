@@ -4,8 +4,9 @@ build:
     - GOOS=linux
     - GOARCH=amd64
     - CGO_ENABLED=0
+    - GOPATH=
   commands:
-    - godeps restore
+    - godep restore
     - go test
     - go build -a -tags netgo
 
