@@ -65,7 +65,7 @@ Templates are executed with:
 ```
 
 #### .drone.yml
-Add a publish step to your project .drone.yml.
+Add a publish step to your project `.drone.yml`.
 
 This will require you to add `jgreat/drone-rancher-catalog` to the `PLUGIN_FILTER` variable when you run the drone server.
 
@@ -83,23 +83,23 @@ publish:
 ```
 
 ### TODO
-* Idea: Some kind of tag matching template and regex to allow any kind of tags.
+* Idea: Some kind of tag matching template and regex to allow any kind of tags. 
 * Issue: Don't delete tags from your registry. Will mess up the catalog dir order. Need to create and maintain a simple index of builds.
 
 ### Build
 build with go version 1.6
 
-Restore Dependencies
+**Restore Dependencies**
 ```
 godep restore
 ```
 
-Build
+**Build**
 ```
 build.sh
 ```
 
-Test Run
+**Test Run**
 ```
 run.sh
 ```
