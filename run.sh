@@ -12,17 +12,17 @@ leankit/drone-rancher-catalog <<EOF
 		"path": "/app"
 	},
 	"repo": {
-		"name": "core-leankit-api",
-		"owner": "BanditSoftware"
+		"name": "core-api",
+		"owner": "jgreat"
 	},
 	"vargs": {
 		"docker_username": "$DOCKER_USER",
 		"docker_password": "$DOCKER_PASS",
-		"docker_repo": "leankit/core-leankit-api",
-		"catalog_repo": "jgreat/rancher-core-leankit-api",
+		"docker_repo": "jgreat/core-api",
+		"catalog_repo": "jgreat/rancher-core-api",
 		"github_token": "$GITHUB_TOKEN",
 		"github_user": "Jason Greathouse",
-		"github_email": "jason.greathouse@leankit.com"
+		"github_email": "jgreat@jgreat.me"
 	}
 }
 EOF

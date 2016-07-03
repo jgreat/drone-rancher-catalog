@@ -13,8 +13,9 @@ build:
 
 publish:
   docker:
-    username: jgreat
+    username: $$DOCKER_USER
     password: $$DOCKER_PASS
+    email $$DOCKER_EMAIL
     repo: jgreat/drone-rancher-catalog
     tags:
       - 0.0.1
