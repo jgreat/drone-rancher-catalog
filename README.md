@@ -1,4 +1,6 @@
 # drone-rancher-catalog
+[![Build Status](https://drone.leankit.io/api/badges/jgreat/drone-rancher-catalog/status.svg)](https://drone.leankit.io/jgreat/drone-rancher-catalog)
+
 Drone CI plugin to publish builds to a custom rancher-catalog.
 
 This plugin will read all of the tags in the specified Docker Hub Repo and create entries based on 2 styles of tags.
