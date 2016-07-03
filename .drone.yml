@@ -1,0 +1,30 @@
+build:
+  image: golang:1.6
+  environment:
+    - GOOS=linux
+    - GOARCH=amd64
+    - CGO_ENABLED=0
+  commands:
+    - godeps restore
+    - go test
+    - go build -a -tags netgo
+
+publish:
+  docker:
+    username: jgreat
+    password: $$DOCKER_PASS
+    repo: jgreat/drone-rancher-catalog
+    tags:
+      - 0.0.1
+      - latest
+    when:
+      branch: master
+
+plugin:
+  name: rancher-catalog
+  desc: Build a custom rancher catalog entry
+  type: publish
+  image: jgreat/drone-rancher-catalog
+  labels:
+    - rancher
+    - image
