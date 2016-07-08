@@ -176,7 +176,7 @@ func main() {
 					catalog.executeTemplate(dockerComposeTarget, dockerComposeTmpl, tbb.branches[branch].versions[version].builds[build])
 				}
 				rancherComposeTarget := fmt.Sprintf("%s/rancher-compose.yml", buildDir)
-				if !exists(dockerComposeTarget) {
+				if !exists(rancherComposeTarget) {
 					catalog.executeTemplate(rancherComposeTarget, rancherComposeTmpl, tbb.branches[branch].versions[version].builds[build])
 				}
 
@@ -219,7 +219,7 @@ func (c *catalog) getTags() []string {
 // parseTag Returns a Tag object from a buildgoogles style tag
 func (c *catalog) parseTag(t string) *Tag {
 	var tag = &Tag{}
-	featureRe := regexp.MustCompile(fmt.Sprintf(`^%s_`, c.repo.Owner))
+	featureRe := regexp.MustCompile(fmt.Sprintf(`^%s_%s_`, c.repo.Owner, c.repo.Name))
 	releaseRe := regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 	// Skip forks and other nonsense tags
 	switch {
@@ -294,8 +294,6 @@ func (c *catalog) cloneCatalogRepo() {
 	os.RemoveAll(repoDir)
 
 	cmd := exec.Command("git", "clone", gitHubURL, repoDir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
 		fmt.Printf("ERROR: Failed to Clone Repo %v", err)
