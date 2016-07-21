@@ -296,7 +296,7 @@ func (c *catalog) cloneCatalogRepo() {
 	cmd := exec.Command("git", "clone", gitHubURL, repoDir)
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("ERROR: Failed to Clone Repo %v", err)
+		fmt.Printf("ERROR: Failed to Clone Repo %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -307,7 +307,7 @@ func (c *catalog) addCatalogRepo() {
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("ERROR: Failed to git add %v", err)
+		fmt.Printf("ERROR: Failed to git add %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -319,7 +319,7 @@ func (c *catalog) commitCatalogRepo() {
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("ERROR: Failed to git commit %v", err)
+		fmt.Printf("ERROR: Failed to git commit %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -329,7 +329,7 @@ func (c *catalog) pushCatalogRepo() {
 	err := cmd.Run()
 	// Not showing output, bleeds the API key
 	if err != nil {
-		fmt.Printf("ERROR: Failed to git push %v", err)
+		fmt.Printf("ERROR: Failed to git push %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -338,7 +338,7 @@ func (c *catalog) parseTemplateFile(file string) *template.Template {
 	name := filepath.Base(file)
 	tmpl, err := template.New(name).ParseFiles(file)
 	if err != nil {
-		fmt.Printf("ERROR: Failed parse template %v", err)
+		fmt.Printf("ERROR: Failed parse template %v\n", err)
 		os.Exit(1)
 	}
 	return tmpl
@@ -347,12 +347,12 @@ func (c *catalog) parseTemplateFile(file string) *template.Template {
 func (c *catalog) executeTemplate(target string, tmpl *template.Template, tag *Tag) {
 	targetFile, err := os.Create(target)
 	if err != nil {
-		fmt.Printf("ERROR: Failed to open file %v", err)
+		fmt.Printf("ERROR: Failed to open file %v\n", err)
 		os.Exit(1)
 	}
 	err = tmpl.Execute(targetFile, tag)
 	if err != nil {
-		fmt.Printf("ERROR: Failed execute template %v", err)
+		fmt.Printf("ERROR: Failed execute template %v\n", err)
 		os.Exit(1)
 	}
 	targetFile.Close()
@@ -365,7 +365,7 @@ func copy(src string, dest string) {
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("ERROR: Failed to cp %v", err)
+		fmt.Printf("ERROR: Failed to cp %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -390,7 +390,7 @@ func (c *catalog) gitConfigureEmail() {
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("ERROR: Failed to git config %v", err)
+		fmt.Printf("ERROR: Failed to git config %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -401,7 +401,7 @@ func (c *catalog) gitConfigureUser() {
 	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("ERROR: Failed to git config %v", err)
+		fmt.Printf("ERROR: Failed to git config %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -411,7 +411,7 @@ func (c *catalog) gitChanged() bool {
 	cmd := exec.Command("git", "status", "--porcelain")
 	out, err := cmd.Output()
 	if err != nil {
-		fmt.Printf("ERROR: Failed to git status %v", err)
+		fmt.Printf("ERROR: Failed to git status %v\n", err)
 		os.Exit(1)
 	}
 	// no output means no changes.
