@@ -72,7 +72,7 @@ This will require you to add `jgreat/drone-rancher-catalog` to the `PLUGIN_FILTE
 ```yaml
 publish:
   rancher-catalog:
-    image: jgreat/docker-rancher-catalog
+    image: jgreat/drone-rancher-catalog
     docker_username: $$DOCKER_USER        # Docker Hub Username
     docker_password: $$DOCKER_PASS        # Docker Hub Password
     docker_repo: jgreat/core-api          # Docker Hub Repo
