@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
+	"github.com/blang/semver"
 	"github.com/drone/drone-plugin-go/plugin"
 	"github.com/heroku/docker-registry-client/registry"
 )
@@ -57,7 +59,7 @@ type branch struct {
 
 // version struct
 type version struct {
-	builds map[string]*Tag
+	builds map[int]*Tag
 }
 
 // Tag struct
@@ -68,7 +70,7 @@ type Tag struct {
 	Project string
 	Branch  string
 	Version string
-	Build   string
+	Build   int
 	SHA     string
 }
 
@@ -144,28 +146,34 @@ func main() {
 			os.Mkdir(branchDir, 0755)
 		}
 
-		// sort versions so we can count builds in a feature branch
-		var vKeys []string
+		// sort semver so we can count builds in a feature branch
+		var vKeys []semver.Version
 		for k := range tbb.branches[branch].versions {
-			vKeys = append(vKeys, k)
+			version, err := semver.Parse(k)
+			if err != nil {
+				fmt.Printf("Error parsing version %v \n", err)
+				continue
+			}
+			vKeys = append(vKeys, version)
 		}
-		sort.Strings(vKeys)
+		semver.Sort(vKeys)
 
 		for _, version := range vKeys {
 			// sort builds to count in order
-			var bKeys []string
-			for k := range tbb.branches[branch].versions[version].builds {
+			var bKeys []int
+			ver := version.String()
+			for k := range tbb.branches[branch].versions[ver].builds {
 				bKeys = append(bKeys, k)
 			}
-			sort.Strings(bKeys)
+			sort.Ints(bKeys)
 
 			for _, build := range bKeys {
-				tbb.branches[branch].versions[version].builds[build].Count = count
+				tbb.branches[branch].versions[ver].builds[build].Count = count
 
 				// create dir structure
 				buildDir := fmt.Sprintf("%s/%d", branchDir, count)
 				if !exists(buildDir) {
-					fmt.Printf("  %d:%s %s-%s\n", count, branch, version, build)
+					fmt.Printf("  %d:%s %s-%d\n", count, branch, ver, build)
 					os.Mkdir(buildDir, 0755)
 				}
 
@@ -173,14 +181,14 @@ func main() {
 				// don't generate files if they already exist
 				dockerComposeTarget := fmt.Sprintf("%s/docker-compose.yml", buildDir)
 				if !exists(dockerComposeTarget) {
-					catalog.executeTemplate(dockerComposeTarget, dockerComposeTmpl, tbb.branches[branch].versions[version].builds[build])
+					catalog.executeTemplate(dockerComposeTarget, dockerComposeTmpl, tbb.branches[branch].versions[ver].builds[build])
 				}
 				rancherComposeTarget := fmt.Sprintf("%s/rancher-compose.yml", buildDir)
 				if !exists(rancherComposeTarget) {
-					catalog.executeTemplate(rancherComposeTarget, rancherComposeTmpl, tbb.branches[branch].versions[version].builds[build])
+					catalog.executeTemplate(rancherComposeTarget, rancherComposeTmpl, tbb.branches[branch].versions[ver].builds[build])
 				}
 
-				last = tbb.branches[branch].versions[version].builds[build]
+				last = tbb.branches[branch].versions[ver].builds[build]
 				count++
 			}
 		}
@@ -224,6 +232,7 @@ func (c *catalog) parseTag(t string) *Tag {
 	// Skip forks and other nonsense tags
 	switch {
 	case featureRe.MatchString(t):
+		var build string
 		// fmt.Println("Found Feature Branch Tag", t)
 		tagParts := strings.Split(t, "_")
 		// shift the owner and project from the front
@@ -233,7 +242,8 @@ func (c *catalog) parseTag(t string) *Tag {
 		tag.Owner, tagParts = tagParts[0], tagParts[1:]
 		tag.Project, tagParts = tagParts[0], tagParts[1:]
 		tag.SHA, tagParts = tagParts[len(tagParts)-1], tagParts[:len(tagParts)-1]
-		tag.Build, tagParts = tagParts[len(tagParts)-1], tagParts[:len(tagParts)-1]
+		build, tagParts = tagParts[len(tagParts)-1], tagParts[:len(tagParts)-1]
+		tag.Build, _ = strconv.Atoi(build)
 		tag.Version, tagParts = tagParts[len(tagParts)-1], tagParts[:len(tagParts)-1]
 		tag.Branch = strings.Join(tagParts, "_")
 	case releaseRe.MatchString(t):
@@ -242,7 +252,7 @@ func (c *catalog) parseTag(t string) *Tag {
 		tag.Owner = c.repo.Owner
 		tag.Project = c.repo.Name
 		tag.Branch = "master"
-		tag.Build = "1"
+		tag.Build = 1
 		tag.SHA = ""
 		versionRe := regexp.MustCompile(`^v`)
 		tag.Version = versionRe.ReplaceAllString(t, "")
@@ -269,7 +279,7 @@ func (c *catalog) tagsByBranch(tags []string) *tagsByBranch {
 		}
 		if _, present := tbb.branches[t.Branch].versions[t.Version]; !present {
 			tbb.branches[t.Branch].versions[t.Version] = version{
-				builds: make(map[string]*Tag),
+				builds: make(map[int]*Tag),
 			}
 		}
 		if _, present := tbb.branches[t.Branch].versions[t.Version].builds[t.Build]; !present {
