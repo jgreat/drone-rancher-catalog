@@ -2,11 +2,19 @@
 	"ImportPath": "github.com/jgreat/drone-rancher-catalog",
 	"GoVersion": "go1.6",
 	"GodepVersion": "v74",
+	"Packages": [
+		"./..."
+	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
 			"Comment": "v0.8.7",
 			"Rev": "418b41d23a1bf978c06faea5313ba194650ac088"
+		},
+		{
+			"ImportPath": "github.com/blang/semver",
+			"Comment": "v3.3.0",
+			"Rev": "60ec3488bfea7cca02b021d106d9911120d25fe9"
 		},
 		{
 			"ImportPath": "github.com/docker/distribution/digest",
