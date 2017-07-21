@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [{
+    "name": "Launch",
+    "type": "go",
+    "request": "launch",
+    "mode": "debug",
+    "remotePath": "",
+    "port": 2345,
+    "host": "127.0.0.1",
+    "program": "${workspaceRoot}",
+    "env": {
+      "PLUGIN_DRY_RUN": "true",
+      "PLUGIN_DEBUG": "true",
+      "PLUGIN_TAGS": "1.0.1-1499290301.test-branch.1234abcd",
+      "PLUGIN_TAG_REGEX": "[0-9]+[.][0-9]+[.][0-9]+$",
+      "PLUGIN_DOCKER_REPO": "jgreat/catalog-test",
+      "PLUGIN_CATALOG_REPO": "BanditSoftware/rancher-generate-drone-tags",
+      "PLUGIN_CATALOG_CONTEXT": "./build/",
+      "PLUGIN_RELEASE_BRANCH": "master",
+      "DRONE_COMMIT_BRANCH": "test-branch",
+      "DRONE_REPO_NAME": "catalog-test",
+      "DRONE_BUILD_NUMBER": "1499290301"
+      // "GITHUB_EMAIL": "Set in your Terminal",
+      // "GITHUB_USERNAME": "Set in your Terminal",
+      // "GITHUB_TOKEN": "Set in your Terminal",
+    },
+    "args": [],
+    "showLog": true
+  }]
+}

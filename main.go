@@ -1,434 +1,166 @@
 package main
 
+// drone-rancher-catalog
+// Build rancher catalog entries for completed builds
+// Plugin layout based off of github.com/drone-plugins/drone-docker
+
 import (
-	"fmt"
-	"io/ioutil"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"text/template"
 
-	"github.com/blang/semver"
-	"github.com/drone/drone-plugin-go/plugin"
-	"github.com/heroku/docker-registry-client/registry"
+	"github.com/Sirupsen/logrus"
+	"github.com/joho/godotenv"
+	"github.com/urfave/cli"
 )
 
-const (
-	baseDir                    string = "/rancher-catalog"
-	repoDir                    string = "/rancher-catalog/repo"
-	templateDir                string = "/rancher-catalog/repo/base"
-	dockerComposeTemplateFile  string = "/rancher-catalog/repo/base/docker-compose.tmpl"
-	rancherComposeTemplateFile string = "/rancher-catalog/repo/base/rancher-compose.tmpl"
-	configTemplateFile         string = "/rancher-catalog/repo/base/config.tmpl"
-	iconFileBase               string = "/rancher-catalog/repo/base/catalogIcon"
-)
-
-// catalog struct
-type catalog struct {
-	vargs     vargs
-	workspace plugin.Workspace
-	repo      plugin.Repo
-	build     plugin.Build
-}
-
-// vargs strct
-type vargs struct {
-	DockerRepo     string `json:"docker_repo"`
-	DockerUsername string `json:"docker_username"`
-	DockerPassword string `json:"docker_password"`
-	DockerURL      string `json:"docker_url"`
-	CatalogRepo    string `json:"catalog_repo"`
-	GitHubToken    string `json:"github_token"`
-	GitHubUser     string `json:"github_user"`
-	GitHubEmail    string `json:"github_email"`
-}
-
-// tagsByBranch struct
-type tagsByBranch struct {
-	branches map[string]branch
-}
-
-// branch struct
-type branch struct {
-	versions map[string]version
-}
-
-// version struct
-type version struct {
-	builds map[int]*Tag
-}
-
-// Tag struct
-type Tag struct {
-	Tag     string
-	Count   int
-	Owner   string
-	Project string
-	Branch  string
-	Version string
-	Build   int
-	SHA     string
-}
+var version = "1.0.0"
 
 func main() {
-	fmt.Println("starting drone-rancher-catalog...")
-
-	var catalog = catalog{}
-	plugin.Param("workspace", &catalog.workspace)
-	plugin.Param("repo", &catalog.repo)
-	plugin.Param("build", &catalog.build)
-	plugin.Param("vargs", &catalog.vargs)
-	plugin.MustParse()
-
-	if len(catalog.vargs.DockerRepo) == 0 {
-		fmt.Println("ERROR: docker_repo: Docker Registry Repo to read tags from, not specified")
-		os.Exit(1)
-	}
-	if len(catalog.vargs.DockerUsername) == 0 {
-		fmt.Println("ERROR: docker_username: Docker Registry Username not specified")
-		os.Exit(1)
-	}
-	if len(catalog.vargs.DockerPassword) == 0 {
-		fmt.Println("ERROR: docker_password: Docker Registry Password not specified")
-		os.Exit(1)
-	}
-	if len(catalog.vargs.CatalogRepo) == 0 {
-		fmt.Println("ERROR: catalog_repo: GitHub Catalog Repo not specified")
-		os.Exit(1)
-	}
-	if len(catalog.vargs.GitHubToken) == 0 {
-		fmt.Println("ERROR: github_token: GitHub User Token not specified")
-		os.Exit(1)
-	}
-	if len(catalog.vargs.DockerURL) == 0 {
-		catalog.vargs.DockerURL = "https://registry.hub.docker.com/"
-	}
-	if len(catalog.vargs.GitHubUser) == 0 {
-		catalog.vargs.GitHubUser = catalog.build.Author
-	}
-	if len(catalog.vargs.GitHubEmail) == 0 {
-		catalog.vargs.GitHubEmail = catalog.build.Email
+	if env := os.Getenv("PLUGIN_ENV_FILE"); env != "" {
+		godotenv.Load(env)
 	}
 
-	// create a dir outside the workspace
-	if !exists(baseDir) {
-		os.Mkdir(baseDir, 0755)
+	app := cli.NewApp()
+	app.Name = "drone-rancher-catalog plugin"
+	app.Usage = "drone-rancher-catalog plugin"
+	app.Action = run
+	app.Version = version
+	app.Flags = []cli.Flag{
+		cli.BoolFlag{
+			Name:   "dry_run",
+			Usage:  "dry run disables github commit and push",
+			EnvVar: "PLUGIN_DRY_RUN",
+		},
+		cli.BoolFlag{
+			Name:   "debug",
+			Usage:  "Debug output - WARNING will bleed credentials",
+			EnvVar: "PLUGIN_DEBUG",
+		},
+		// Build Flags
+		cli.StringFlag{
+			Name:   "context",
+			Usage:  "build context",
+			Value:  ".",
+			EnvVar: "PLUGIN_CONTEXT",
+		},
+		cli.StringFlag{
+			Name:   "catalog_context",
+			Usage:  "catalog directory context",
+			Value:  "/",
+			EnvVar: "PLUGIN_CATALOG_CONTEXT",
+		},
+		cli.StringFlag{
+			Name:   "release_branch",
+			Usage:  "Release branch to rename to match project",
+			EnvVar: "PLUGIN_RELEASE_BRANCH",
+		},
+		cli.StringSliceFlag{
+			Name:   "tags",
+			Usage:  "tags",
+			EnvVar: "PLUGIN_TAG,PLUGIN_TAGS",
+		},
+		cli.StringFlag{
+			Name:   "tag_regex",
+			Usage:  "Regex to pick your tag.",
+			EnvVar: "PLUGIN_TAG_REGEX",
+			Value:  "",
+		},
+		cli.StringFlag{
+			Name:   "build_commit_branch",
+			Usage:  "git commit branch",
+			EnvVar: "DRONE_COMMIT_BRANCH",
+		},
+		cli.StringFlag{
+			Name:   "build_repo_name",
+			Usage:  "build github repo name",
+			EnvVar: "DRONE_REPO_NAME",
+		},
+		cli.StringFlag{
+			Name:   "build_number",
+			Usage:  "drone build number",
+			EnvVar: "DRONE_BUILD_NUMBER",
+		},
+		// Docker
+		cli.StringFlag{
+			Name:   "docker_repo",
+			Usage:  "docker hub repo that the image is in",
+			EnvVar: "PLUGIN_DOCKER_REPO",
+		},
+		// Github
+		cli.StringFlag{
+			Name:   "github_email",
+			Usage:  "github email",
+			EnvVar: "PLUGIN_GITHUB_EMAIL,GITHUB_EMAIL",
+		},
+		cli.StringFlag{
+			Name:   "github_username",
+			Usage:  "github username",
+			EnvVar: "PLUGIN_GITHUB_USERNAME,GITHUB_USERNAME",
+		},
+		cli.StringFlag{
+			Name:   "github_token",
+			Usage:  "github api token",
+			EnvVar: "PLUGIN_GITHUB_TOKEN,GITHUB_TOKEN",
+		},
+		// Rancher catalog - this is a github 'owner/repo'
+		cli.StringFlag{
+			Name:   "catalog_repo",
+			Usage:  "github catalog repo",
+			EnvVar: "PLUGIN_CATALOG_REPO",
+		},
 	}
 
-	catalog.cloneCatalogRepo()
-	os.Chdir(repoDir)
-	catalog.gitConfigureEmail()
-	catalog.gitConfigureUser()
-
-	if !exists("./templates") {
-		os.Mkdir("./templates", 0755)
+	if err := app.Run(os.Args); err != nil {
+		logrus.Fatal(err)
 	}
-
-	dockerComposeTmpl := catalog.parseTemplateFile(dockerComposeTemplateFile)
-	rancherComposeTmpl := catalog.parseTemplateFile(rancherComposeTemplateFile)
-	configTmpl := catalog.parseTemplateFile(configTemplateFile)
-
-	tags := catalog.getTags()
-	tbb := catalog.tagsByBranch(tags)
-
-	fmt.Println("Creating Catalog Templates for:")
-	for branch := range tbb.branches {
-		var count int
-		var last *Tag
-
-		// create branch dir
-		branchDir := fmt.Sprintf("./templates/%s", branch)
-		if !exists(branchDir) {
-			os.Mkdir(branchDir, 0755)
-		}
-
-		// sort semver so we can count builds in a feature branch
-		var vKeys []semver.Version
-		for k := range tbb.branches[branch].versions {
-			version, err := semver.Parse(k)
-			if err != nil {
-				fmt.Printf("Error parsing version %v \n", err)
-				continue
-			}
-			vKeys = append(vKeys, version)
-		}
-		semver.Sort(vKeys)
-
-		for _, version := range vKeys {
-			// sort builds to count in order
-			var bKeys []int
-			ver := version.String()
-			for k := range tbb.branches[branch].versions[ver].builds {
-				bKeys = append(bKeys, k)
-			}
-			sort.Ints(bKeys)
-
-			for _, build := range bKeys {
-				tbb.branches[branch].versions[ver].builds[build].Count = count
-
-				// create dir structure
-				buildDir := fmt.Sprintf("%s/%d", branchDir, count)
-				if !exists(buildDir) {
-					fmt.Printf("  %d:%s %s-%d\n", count, branch, ver, build)
-					os.Mkdir(buildDir, 0755)
-				}
-
-				// create docker-compose.yml and rancher-compose.yml from template
-				// don't generate files if they already exist
-				dockerComposeTarget := fmt.Sprintf("%s/docker-compose.yml", buildDir)
-				if !exists(dockerComposeTarget) {
-					catalog.executeTemplate(dockerComposeTarget, dockerComposeTmpl, tbb.branches[branch].versions[ver].builds[build])
-				}
-				rancherComposeTarget := fmt.Sprintf("%s/rancher-compose.yml", buildDir)
-				if !exists(rancherComposeTarget) {
-					catalog.executeTemplate(rancherComposeTarget, rancherComposeTmpl, tbb.branches[branch].versions[ver].builds[build])
-				}
-
-				last = tbb.branches[branch].versions[ver].builds[build]
-				count++
-			}
-		}
-
-		// create config.yml from temlplate
-		configTarget := fmt.Sprintf("%s/config.yml", branchDir)
-		catalog.executeTemplate(configTarget, configTmpl, last)
-
-		// Icon file
-		copyIcon(iconFileBase, branchDir)
-	}
-	// TODO: Delete dir/files if tags don't exist anymore. Need to maintian build dir numbering
-
-	if catalog.gitChanged() {
-		catalog.addCatalogRepo()
-		catalog.commitCatalogRepo()
-		catalog.pushCatalogRepo()
-	}
-	fmt.Println("... Finished drone-rancher-catalog")
 }
 
-func (c *catalog) getTags() []string {
-	hub, err := registry.New(c.vargs.DockerURL, c.vargs.DockerUsername, c.vargs.DockerPassword)
-	if err != nil {
-		fmt.Println("ERROR: Could not Contact Docker Registry", err)
-		os.Exit(1)
+func run(c *cli.Context) error {
+	plugin := Plugin{
+		Dryrun:   c.Bool("dry_run"),
+		Debug:    c.Bool("debug"),
+		TagRegex: c.String("tag_regex"),
+		Catalog: Catalog{
+			Context:       c.String("catalog_context"),
+			Repo:          c.String("catalog_repo"),
+			ReleaseBranch: c.String("release_branch"),
+		},
+		Docker: Docker{
+			Repo: c.String("docker_repo"),
+		},
+		Github: Github{
+			Username: c.String("github_username"), // can we just use a an api token here?
+			Token:    c.String("github_token"),    // ^^^
+			Email:    c.String("github_email"),
+		},
+		Build: Build{
+			Repo:    c.String("build_repo_name"),
+			Number:  c.Int64("build_number"),
+			Branch:  c.String("build_commit_branch"),
+			Tags:    c.StringSlice("tags"),
+			Context: c.String("build_context"),
+		},
 	}
-	tags, err := hub.Tags(c.vargs.DockerRepo)
-	if err != nil {
-		fmt.Println("ERROR: Getting tags", err)
-		os.Exit(1)
+
+	// there has to be a better way to check flags
+	required := []string{
+		"catalog_repo",
+		"docker_repo",
+		"github_username",
+		"github_token",
+		"github_email",
+		"build_repo_name",
+		"build_number",
+		"build_commit_branch",
+		"tags",
 	}
-	return tags
-}
 
-// parseTag Returns a Tag object from a buildgoogles style tag
-func (c *catalog) parseTag(t string) *Tag {
-	var tag = &Tag{}
-	featureRe := regexp.MustCompile(fmt.Sprintf(`^%s_%s_`, c.repo.Owner, c.repo.Name))
-	releaseRe := regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
-	// Skip forks and other nonsense tags
-	switch {
-	case featureRe.MatchString(t):
-		var build string
-		// fmt.Println("Found Feature Branch Tag", t)
-		tagParts := strings.Split(t, "_")
-		// shift the owner and project from the front
-		// pop the sha, build, and version from the back
-		// join whats left into the branch
-		tag.Tag = t
-		tag.Owner, tagParts = tagParts[0], tagParts[1:]
-		tag.Project, tagParts = tagParts[0], tagParts[1:]
-		tag.SHA, tagParts = tagParts[len(tagParts)-1], tagParts[:len(tagParts)-1]
-		build, tagParts = tagParts[len(tagParts)-1], tagParts[:len(tagParts)-1]
-		tag.Build, _ = strconv.Atoi(build)
-		tag.Version, tagParts = tagParts[len(tagParts)-1], tagParts[:len(tagParts)-1]
-		tag.Branch = strings.Join(tagParts, "_")
-	case releaseRe.MatchString(t):
-		// fmt.Println("Found Release Tag", t)
-		tag.Tag = t
-		tag.Owner = c.repo.Owner
-		tag.Project = c.repo.Name
-		tag.Branch = "master"
-		tag.Build = 1
-		tag.SHA = ""
-		versionRe := regexp.MustCompile(`^v`)
-		tag.Version = versionRe.ReplaceAllString(t, "")
-	default:
-		return nil
-	}
-	return tag
-}
-
-// tagsByBranch break down tag list and return a tagsByBranch object
-func (c *catalog) tagsByBranch(tags []string) *tagsByBranch {
-	tbb := &tagsByBranch{}
-	tbb.branches = make(map[string]branch)
-
-	for _, tg := range tags {
-		t := c.parseTag(tg)
-		if t == nil {
-			continue
-		}
-		if _, present := tbb.branches[t.Branch]; !present {
-			tbb.branches[t.Branch] = branch{
-				versions: make(map[string]version),
-			}
-		}
-		if _, present := tbb.branches[t.Branch].versions[t.Version]; !present {
-			tbb.branches[t.Branch].versions[t.Version] = version{
-				builds: make(map[int]*Tag),
-			}
-		}
-		if _, present := tbb.branches[t.Branch].versions[t.Version].builds[t.Build]; !present {
-			tbb.branches[t.Branch].versions[t.Version].builds[t.Build] = t
+	// cli package doesn't seem have a way to return the Usage for a flag :(
+	for _, flag := range required {
+		present := c.IsSet(flag)
+		if !present {
+			logrus.Fatalf("Missing Required Flag %s", flag)
 		}
 	}
-	return tbb
-}
 
-func exists(f string) bool {
-	if _, err := os.Stat(f); os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-func (c *catalog) cloneCatalogRepo() {
-	gitHubURL := fmt.Sprintf("https://%s:x-oauth-basic@github.com/%s.git", c.vargs.GitHubToken, c.vargs.CatalogRepo)
-
-	fmt.Println("Cloning Rancher-Catalog repo:", c.vargs.CatalogRepo)
-	// clear if existing and git clone target repo
-	os.RemoveAll(repoDir)
-
-	cmd := exec.Command("git", "clone", gitHubURL, repoDir)
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("ERROR: Failed to Clone Repo %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func (c *catalog) addCatalogRepo() {
-	cmd := exec.Command("git", "add", "-A")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("ERROR: Failed to git add %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func (c *catalog) commitCatalogRepo() {
-	message := fmt.Sprintf("'Update from Drone Build: %d'", c.build.Number)
-	cmd := exec.Command("git", "commit", "-m", message)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("ERROR: Failed to git commit %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func (c *catalog) pushCatalogRepo() {
-	cmd := exec.Command("git", "push")
-	err := cmd.Run()
-	// Not showing output, bleeds the API key
-	if err != nil {
-		fmt.Printf("ERROR: Failed to git push %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func (c *catalog) parseTemplateFile(file string) *template.Template {
-	name := filepath.Base(file)
-	tmpl, err := template.New(name).ParseFiles(file)
-	if err != nil {
-		fmt.Printf("ERROR: Failed parse template %v\n", err)
-		os.Exit(1)
-	}
-	return tmpl
-}
-
-func (c *catalog) executeTemplate(target string, tmpl *template.Template, tag *Tag) {
-	targetFile, err := os.Create(target)
-	if err != nil {
-		fmt.Printf("ERROR: Failed to open file %v\n", err)
-		os.Exit(1)
-	}
-	err = tmpl.Execute(targetFile, tag)
-	if err != nil {
-		fmt.Printf("ERROR: Failed execute template %v\n", err)
-		os.Exit(1)
-	}
-	targetFile.Close()
-}
-
-// copy src.* (repo/base/catalogIcon.*) to dest directory
-func copy(src string, dest string) {
-	cmd := exec.Command("cp", src, dest)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("ERROR: Failed to cp %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func copyIcon(src string, dest string) {
-	dir := filepath.Dir(src)
-	base := filepath.Base(src)
-	// find files in dir that match base
-	iconRe := regexp.MustCompile(fmt.Sprintf(`^%s`, base))
-	files, _ := ioutil.ReadDir(dir)
-	for _, f := range files {
-		if iconRe.MatchString(f.Name()) {
-			name := fmt.Sprintf("%s/%s", dir, f.Name())
-			copy(name, dest)
-		}
-	}
-}
-
-func (c *catalog) gitConfigureEmail() {
-	cmd := exec.Command("git", "config", "user.email", c.vargs.GitHubEmail)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("ERROR: Failed to git config %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func (c *catalog) gitConfigureUser() {
-	cmd := exec.Command("git", "config", "user.name", c.vargs.GitHubUser)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("ERROR: Failed to git config %v\n", err)
-		os.Exit(1)
-	}
-}
-
-// returns true if there are files that need to be commited.
-func (c *catalog) gitChanged() bool {
-	cmd := exec.Command("git", "status", "--porcelain")
-	out, err := cmd.Output()
-	if err != nil {
-		fmt.Printf("ERROR: Failed to git status %v\n", err)
-		os.Exit(1)
-	}
-	// no output means no changes.
-	if len(out) == 0 {
-		fmt.Println("No files changed.")
-		return false
-	}
-	fmt.Println("Files changed, add/commit/push changes.")
-	return true
+	return plugin.Exec()
 }
