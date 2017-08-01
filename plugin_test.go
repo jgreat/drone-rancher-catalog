@@ -31,11 +31,11 @@ var pickTagTests = []pickTagsTestSet{
 		err:         nil,
 	},
 	{
-		description: "Latest - Should return latest tag",
+		description: "Latest - Should return blank and error",
 		tags:        []string{"latest"},
 		tagRegex:    "[0-9]+[.][0-9]+[.][0-9]+$",
-		result:      "latest",
-		err:         nil,
+		result:      "",
+		err:         fmt.Errorf("No valid tags found"),
 	},
 	{
 		description: "No latest and not regex match - Should return first non latest (only) tag",

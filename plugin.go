@@ -57,10 +57,6 @@ type (
 		Repo          string
 		ReleaseBranch string
 	}
-	// Docker - Docker Hub parameters.
-	Docker struct {
-		Repo string
-	}
 	// Github - Login parameters.
 	Github struct {
 		Username string
@@ -72,35 +68,38 @@ type (
 		Context string   // Drone build context
 		Tags    []string // Drone build tags
 		Repo    string   // Drone build repo
-		Branch  string   // Drone build repository
+		Branch  string   // Drone build branch
 		Number  int64    // Drone build number
 	}
 	// Plugin defines the Docker plugin parameters.
 	Plugin struct {
 		Build    Build   // Drone Build details
 		Catalog  Catalog // Rancher catalog
-		Docker   Docker
-		Dryrun   bool // Skip catalog push
+		Dryrun   bool    // Skip catalog push
 		Debug    bool
 		Github   Github // Github creds to get rancher catalog
 		TagRegex string
 	}
 	// TemplateContext - the values that get passed into the template.
 	TemplateContext struct {
-		Tag        string
-		Build      int64
-		Project    string
-		GithubRepo string
-		DockerRepo string
-		Branch     string
+		Tag     string
+		Build   int64
+		Project string
+		Branch  string
 	}
 )
 
 // Exec executes the plugin step
 func (p Plugin) Exec() error {
+	// setup logs
+	customFormatter := new(logrus.TextFormatter)
+	logrus.SetFormatter(customFormatter)
+	customFormatter.DisableTimestamp = true
+	customFormatter.ForceColors = true
 	if p.Debug {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
+
 	// Set HOME to catalog context.
 	// So git can write its config while testing and not stomp on yours.
 	os.Setenv("HOME", p.Catalog.Context)
@@ -112,8 +111,6 @@ func (p Plugin) Exec() error {
 
 	// Set up template parameters.
 	templateContext.Build = p.Build.Number
-	templateContext.GithubRepo = p.Build.Repo
-	templateContext.DockerRepo = p.Docker.Repo
 	templateContext.Project = fixName(p.Build.Repo)
 	templateContext.Branch = fixName(p.Build.Branch)
 	templateContext.Tag, err = pickTag(p.Build.Tags, p.TagRegex)
@@ -367,13 +364,6 @@ func pickTag(tags []string, tagRegex string) (string, error) {
 	for _, tag := range tags {
 		if tag != "latest" {
 			logrus.Debugf("Using first tag that is not 'latest' tag: %s", tag)
-			return tag, nil
-		}
-	}
-	// latest
-	for _, tag := range tags {
-		if tag == "latest" {
-			logrus.Debug("Using 'latest' tag.")
 			return tag, nil
 		}
 	}

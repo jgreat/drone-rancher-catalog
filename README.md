@@ -52,10 +52,8 @@ Templates are executed with:
 
 ```go
 {{ .Build }}      // Drone Build Number
-{{ .Branch }}     // Github Branch from Drone
-{{ .DockerRepo }} // Docker Hub owner/repo
-{{ .GithubRepo }} // Github Repo from Drone
-{{ .Project }}    // Github Repo normalized for Rancher (lowercase and replace [_\.\s] with -)
+{{ .Branch }}     // Github Branch from Drone Build
+{{ .Project }}    // Github Repo from Drone Build normalized for Rancher (lowercase and replace [_\.\s] with -)
 {{ .Tag }}        // Docker Image Tag
 ```
 
@@ -69,9 +67,8 @@ pipeline:
     image: jgreat/drone-rancher-catalog
     env_file: .env                            # env file that will set environment variables for the build.
     catalog_repo: jgreat/rancher-test-catalog # Rancher Catalog Github Repo
-    docker_repo: jgreat/test-catalog          # Docker Hub Repo
-    tag_regex: "[0-9]+[.][0-9]+[.][0-9]+"     # 
-    release_branch: master                    # 
+    tag_regex: "[0-9]+[.][0-9]+[.][0-9]+"     # See Tag RegEx
+    release_branch: master                    # See Standard Options
     tags:                                     # Docker Image Tags (See Tags for more info)
       - latest
       - 1.0.1
@@ -90,7 +87,6 @@ pipeline:
 #### Standard Options
 
 * `catalog_repo`: Github Repo for your Rancher Catalog. See [Catalog Format](#catalog-format).
-* `docker_repo`: Your docker repository.
 * `tags`: List of image tags. See [Tags](#tags) for more advanced options.
 * `tag_regex`: (Optional) Regular Expression to choose what docker image tag to use for the catalog. See [Tags](#tags) for more advanced options.
 * `release_branch`: (Optional) Branch name to use as the release. The `{{ .Branch }}` template parameter will be set = to `{{ .Project }}` parameter. The catalog entry will be named with the `{{ .Project }}` parameter.

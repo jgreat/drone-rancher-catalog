@@ -12,11 +12,11 @@ import (
 	"github.com/urfave/cli"
 )
 
-var version = "1.0.0"
+var version = "1.0.1"
 
 func main() {
 	if env := os.Getenv("PLUGIN_ENV_FILE"); env != "" {
-		godotenv.Load(env)
+		godotenv.Overload(env)
 	}
 
 	app := cli.NewApp()
@@ -32,7 +32,7 @@ func main() {
 		},
 		cli.BoolFlag{
 			Name:   "debug",
-			Usage:  "Debug output - WARNING will bleed credentials",
+			Usage:  "Debug output",
 			EnvVar: "PLUGIN_DEBUG",
 		},
 		// Build Flags
@@ -79,12 +79,6 @@ func main() {
 			Usage:  "drone build number",
 			EnvVar: "DRONE_BUILD_NUMBER",
 		},
-		// Docker
-		cli.StringFlag{
-			Name:   "docker_repo",
-			Usage:  "docker hub repo that the image is in",
-			EnvVar: "PLUGIN_DOCKER_REPO",
-		},
 		// Github
 		cli.StringFlag{
 			Name:   "github_email",
@@ -124,9 +118,6 @@ func run(c *cli.Context) error {
 			Repo:          c.String("catalog_repo"),
 			ReleaseBranch: c.String("release_branch"),
 		},
-		Docker: Docker{
-			Repo: c.String("docker_repo"),
-		},
 		Github: Github{
 			Username: c.String("github_username"), // can we just use a an api token here?
 			Token:    c.String("github_token"),    // ^^^
@@ -144,7 +135,6 @@ func run(c *cli.Context) error {
 	// there has to be a better way to check flags
 	required := []string{
 		"catalog_repo",
-		"docker_repo",
 		"github_username",
 		"github_token",
 		"github_email",
